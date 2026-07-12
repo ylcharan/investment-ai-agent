@@ -3,9 +3,13 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 import {
+  AnalysisSchema,
   DecisionSchema,
+  ResearchBriefSchema,
   type AgentState,
+  type AnalysisReport,
   type InvestmentDecision,
+  type ResearchBrief,
 } from "@/lib/types";
 import {
   ANALYSIS_PROMPT,
@@ -13,12 +17,18 @@ import {
   RESEARCH_PROMPT,
 } from "@/lib/agent/prompts";
 import { createSearchTool, searchCompany } from "@/lib/agent/tools";
-import { getGeminiModels, isRetryableModelError, withRetry } from "@/lib/agent/retry";
+import {
+  getGeminiModels,
+  isRetryableModelError,
+  withRetry,
+} from "@/lib/agent/retry";
 
 const MAX_CHARS = 8_000;
 
 const AgentAnnotation = Annotation.Root({
   company: Annotation<string>,
+  research: Annotation<ResearchBrief | null>,
+  analysis: Annotation<AnalysisReport | null>,
   researchNotes: Annotation<string>,
   fundamentalsAnalysis: Annotation<string>,
   riskAssessment: Annotation<string>,
@@ -48,18 +58,54 @@ function truncate(text: string, max = MAX_CHARS): string {
   return `${text.slice(0, max)}\n\n[truncated]`;
 }
 
-function splitAnalysis(text: string): {
-  fundamentalsAnalysis: string;
-  riskAssessment: string;
-} {
-  const risksIdx = text.search(/##\s*Risks/i);
-  if (risksIdx === -1) {
-    return { fundamentalsAnalysis: text, riskAssessment: "See fundamentals section." };
-  }
-  return {
-    fundamentalsAnalysis: text.slice(0, risksIdx).trim(),
-    riskAssessment: text.slice(risksIdx).trim(),
-  };
+function formatResearchNotes(brief: ResearchBrief): string {
+  return [
+    brief.overview,
+    "",
+    "Financials:",
+    ...brief.financials.map((f) => `- ${f.label}: ${f.value} (${f.signal})`),
+    "",
+    `Competitive position: ${brief.competitivePosition}`,
+    "",
+    "Recent developments:",
+    ...brief.recentDevelopments.map((d) => `- ${d}`),
+    "",
+    `Valuation: ${brief.valuationNote}`,
+    brief.dataGaps?.length
+      ? `\nData gaps:\n${brief.dataGaps.map((g) => `- ${g}`).join("\n")}`
+      : "",
+  ].join("\n");
+}
+
+function formatFundamentals(analysis: AnalysisReport): string {
+  const f = analysis.fundamentals;
+  return [
+    `Quality score: ${f.qualityScore}/10`,
+    `Rating: ${f.rating}`,
+    `Growth: ${f.growth}`,
+    `Profitability: ${f.profitability}`,
+    `Balance sheet: ${f.balanceSheet}`,
+    `Moat: ${f.moat}`,
+    `Management: ${f.management}`,
+    "",
+    "Highlights:",
+    ...f.highlights.map((h) => `- [${h.signal}] ${h.point}`),
+  ].join("\n");
+}
+
+function formatRisks(analysis: AnalysisReport): string {
+  const r = analysis.risks;
+  return [
+    `Overall risk: ${r.overall}`,
+    "",
+    "Categories:",
+    ...r.categories.map(
+      (c) => `- ${c.category} (${c.severity}): ${c.detail}`
+    ),
+    "",
+    "Top risks:",
+    ...r.topRisks.map((t) => `- ${t}`),
+  ].join("\n");
 }
 
 async function invokeWithModelFallback<T>(
@@ -80,15 +126,6 @@ async function invokeWithModelFallback<T>(
   throw lastError;
 }
 
-async function invokeLLM(system: string, user: string): Promise<string> {
-  const response = await invokeWithModelFallback((model) =>
-    model.invoke([new SystemMessage(system), new HumanMessage(user)])
-  );
-  return typeof response.content === "string"
-    ? response.content
-    : JSON.stringify(response.content);
-}
-
 export async function runSearch(company: string): Promise<string> {
   const tool = createSearchTool();
   const query = `${company} stock company financial results earnings risks outlook`;
@@ -98,30 +135,35 @@ export async function runSearch(company: string): Promise<string> {
 export async function runResearchBrief(
   company: string,
   searchResults: string
-): Promise<string> {
+): Promise<ResearchBrief> {
   const prompt = fillPrompt(RESEARCH_PROMPT, {
     company,
     searchResults: truncate(searchResults),
   });
-  return invokeLLM(
-    "You produce concise equity research briefs.",
-    prompt
+
+  return invokeWithModelFallback((model) =>
+    model.withStructuredOutput(ResearchBriefSchema).invoke([
+      new SystemMessage("Produce a structured equity research brief."),
+      new HumanMessage(prompt),
+    ])
   );
 }
 
 export async function runAnalysis(
   company: string,
   researchNotes: string
-): Promise<{ fundamentalsAnalysis: string; riskAssessment: string }> {
+): Promise<AnalysisReport> {
   const prompt = fillPrompt(ANALYSIS_PROMPT, {
     company,
     researchNotes: truncate(researchNotes),
   });
-  const analysis = await invokeLLM(
-    "You produce concise fundamental and risk analysis.",
-    prompt
+
+  return invokeWithModelFallback((model) =>
+    model.withStructuredOutput(AnalysisSchema).invoke([
+      new SystemMessage("Produce structured fundamentals and risk analysis."),
+      new HumanMessage(prompt),
+    ])
   );
-  return splitAnalysis(analysis);
 }
 
 export async function runVerdict(
@@ -149,18 +191,24 @@ async function researchNode(
   state: typeof AgentAnnotation.State
 ): Promise<Partial<typeof AgentAnnotation.State>> {
   const searchResults = await runSearch(state.company);
-  const researchNotes = await runResearchBrief(state.company, searchResults);
-  return { researchNotes, currentStep: "analyze" };
+  const research = await runResearchBrief(state.company, searchResults);
+  return {
+    research,
+    researchNotes: formatResearchNotes(research),
+    currentStep: "analyze",
+  };
 }
 
 async function analyzeNode(
   state: typeof AgentAnnotation.State
 ): Promise<Partial<typeof AgentAnnotation.State>> {
-  const { fundamentalsAnalysis, riskAssessment } = await runAnalysis(
-    state.company,
-    state.researchNotes
-  );
-  return { fundamentalsAnalysis, riskAssessment, currentStep: "verdict" };
+  const analysis = await runAnalysis(state.company, state.researchNotes);
+  return {
+    analysis,
+    fundamentalsAnalysis: formatFundamentals(analysis),
+    riskAssessment: formatRisks(analysis),
+    currentStep: "verdict",
+  };
 }
 
 async function verdictNode(
@@ -197,6 +245,8 @@ function getResearchGraph() {
 function initialState(company: string): AgentState {
   return {
     company: company.trim(),
+    research: null,
+    analysis: null,
     researchNotes: "",
     fundamentalsAnalysis: "",
     riskAssessment: "",
@@ -232,19 +282,26 @@ export async function* streamResearch(
   const searchResults = await runSearch(state.company);
 
   yield { step: "research", state, message: "Writing research brief..." };
-  const researchNotes = await runResearchBrief(state.company, searchResults);
-  state = { ...state, researchNotes, currentStep: "analyze" };
-  yield { step: "research", state };
-
-  yield { step: "analyze", state, message: "Analyzing fundamentals & risks..." };
-  const { fundamentalsAnalysis, riskAssessment } = await runAnalysis(
-    state.company,
-    state.researchNotes
-  );
+  const research = await runResearchBrief(state.company, searchResults);
   state = {
     ...state,
-    fundamentalsAnalysis,
-    riskAssessment,
+    research,
+    researchNotes: formatResearchNotes(research),
+    currentStep: "analyze",
+  };
+  yield { step: "research", state };
+
+  yield {
+    step: "analyze",
+    state,
+    message: "Analyzing fundamentals & risks...",
+  };
+  const analysis = await runAnalysis(state.company, state.researchNotes);
+  state = {
+    ...state,
+    analysis,
+    fundamentalsAnalysis: formatFundamentals(analysis),
+    riskAssessment: formatRisks(analysis),
     currentStep: "verdict",
   };
   yield { step: "analyze", state };

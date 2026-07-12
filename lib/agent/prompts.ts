@@ -5,22 +5,23 @@ Company: {company}
 Search findings:
 {searchResults}
 
-Write a concise research brief covering business overview, financials, competitive position, recent news, and valuation. Be factual. Flag missing data. Use bullet points.`;
+Return a structured research brief. Be factual. Flag missing data in dataGaps.
+For each financial metric, set signal to positive / neutral / negative based on investment quality.`;
 
-export const ANALYSIS_PROMPT = `You are a senior equity analyst. Based on the research below, produce TWO sections.
+export const ANALYSIS_PROMPT = `You are a senior equity analyst.
 
 Company: {company}
 
 Research:
 {researchNotes}
 
-## Fundamentals
-Cover: business quality (1-10), growth, profitability, balance sheet, moat, management. End with rating: Strong / Adequate / Weak.
-
-## Risks
-Cover: business, financial, regulatory, macro, and valuation risks. End with overall risk: Low / Medium / High. List top 3 risks.
-
-Be concise and evidence-based.`;
+Return structured fundamentals and risks.
+- qualityScore: 1-10
+- rating: Strong / Adequate / Weak
+- highlights: key points with positive / neutral / negative signal
+- risks.overall: Low / Medium / High
+- categories: each with severity low / medium / high
+- topRisks: the 2-3 risks that could invalidate a bull thesis`;
 
 export const DECISION_PROMPT = `You are the chief investment officer making a final invest/pass decision.
 
@@ -36,4 +37,5 @@ Make a disciplined decision:
 - INVEST: Strong fundamentals, manageable risks, favorable risk/reward
 - PASS: Weak fundamentals, excessive valuation, high risks, or not a publicly investable company
 
-If the company is not a listed stock or data is insufficient, verdict must be PASS with clear reasoning.`;
+If the company is not a listed stock or data is insufficient, verdict must be PASS.
+For keyMetrics assessment use positive / neutral / negative.`;

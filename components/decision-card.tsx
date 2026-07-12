@@ -1,4 +1,11 @@
 import type { InvestmentDecision } from "@/lib/types";
+import {
+  signalBg,
+  signalDot,
+  signalLabel,
+  signalText,
+  severityBg,
+} from "@/lib/ui/signals";
 
 interface DecisionCardProps {
   company: string;
@@ -24,64 +31,91 @@ export function DecisionCard({
 
   return (
     <section className="animate-fade-up">
-      <div className="flex flex-col items-center text-center">
+      <div
+        className={`rounded-2xl border px-6 py-8 text-center sm:px-8 ${
+          isInvest
+            ? "border-emerald-500/30 bg-emerald-500/[0.07]"
+            : "border-red-500/30 bg-red-500/[0.07]"
+        }`}
+      >
         <span
-          className={`text-[11px] font-semibold uppercase tracking-[0.3em] ${
-            isInvest ? "text-emerald-400" : "text-amber-400"
+          className={`inline-flex items-center rounded-full border px-4 py-1.5 text-[12px] font-semibold uppercase tracking-[0.28em] ${
+            isInvest
+              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+              : "border-red-500/40 bg-red-500/15 text-red-300"
           }`}
         >
           {decision.verdict}
         </span>
-        <h2 className="mt-4 text-3xl font-light tracking-[-0.02em] text-white sm:text-4xl">
+
+        <h2 className="mt-5 text-3xl font-light tracking-[-0.02em] text-white sm:text-4xl">
           {company}
         </h2>
-        <p className="mt-3 text-[13px] text-zinc-500">
-          {decision.confidence}% confidence
-          <span className="mx-2 text-zinc-700">·</span>
-          {decision.riskLevel} risk
-          <span className="mx-2 text-zinc-700">·</span>
-          {decision.timeHorizon}
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[12px]">
+          <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1 text-zinc-300">
+            <span
+              className={
+                decision.confidence >= 70
+                  ? "text-emerald-400"
+                  : decision.confidence >= 45
+                    ? "text-amber-400"
+                    : "text-red-400"
+              }
+            >
+              {decision.confidence}%
+            </span>{" "}
+            confidence
+          </span>
+          <span
+            className={`rounded-full border px-3 py-1 capitalize ${severityBg(decision.riskLevel)}`}
+          >
+            {decision.riskLevel} risk
+          </span>
+          <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1 text-zinc-400">
+            {decision.timeHorizon}
+          </span>
           {elapsedMs != null && (
-            <>
-              <span className="mx-2 text-zinc-700">·</span>
-              generated in {formatElapsed(elapsedMs)}
-            </>
+            <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1 text-zinc-500">
+              {formatElapsed(elapsedMs)}
+            </span>
           )}
+        </div>
+
+        <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-[1.7] text-zinc-300">
+          {decision.summary}
         </p>
       </div>
 
-      <p className="mx-auto mt-10 max-w-2xl text-center text-[17px] leading-[1.7] text-zinc-300">
-        {decision.summary}
-      </p>
-
-      <div className="mt-14 grid gap-12 sm:grid-cols-2">
-        <div>
-          <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-emerald-500/80">
+      <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-5">
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-emerald-400">
             Bull case
           </h3>
-          <ul className="mt-5 space-y-3">
+          <ul className="mt-4 space-y-3">
             {decision.bullCase.map((point) => (
               <li
                 key={point}
-                className="flex gap-3 text-[14px] leading-relaxed text-zinc-400"
+                className="flex gap-3 text-[14px] leading-relaxed text-zinc-300"
               >
-                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-emerald-500/60" />
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
                 {point}
               </li>
             ))}
           </ul>
         </div>
-        <div>
-          <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-amber-500/80">
+
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-5">
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-red-400">
             Bear case
           </h3>
-          <ul className="mt-5 space-y-3">
+          <ul className="mt-4 space-y-3">
             {decision.bearCase.map((point) => (
               <li
                 key={point}
-                className="flex gap-3 text-[14px] leading-relaxed text-zinc-400"
+                className="flex gap-3 text-[14px] leading-relaxed text-zinc-300"
               >
-                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-amber-500/60" />
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
                 {point}
               </li>
             ))}
@@ -90,44 +124,43 @@ export function DecisionCard({
       </div>
 
       {decision.keyMetrics.length > 0 && (
-        <div className="mt-14 border-t border-white/[0.06] pt-10">
+        <div className="mt-10">
           <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-zinc-500">
             Key metrics
           </h3>
-          <dl className="mt-6 divide-y divide-white/[0.04]">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {decision.keyMetrics.map((metric) => (
               <div
                 key={metric.label}
-                className="flex items-baseline justify-between gap-4 py-3.5"
+                className={`rounded-xl border px-4 py-3 ${signalBg(metric.assessment)}`}
               >
-                <dt className="text-[13px] text-zinc-500">{metric.label}</dt>
-                <dd className="flex items-baseline gap-3 text-right">
-                  <span className="text-[15px] font-medium text-zinc-200">
-                    {metric.value}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[12px] text-zinc-500">{metric.label}</p>
                   <span
-                    className={`text-[11px] capitalize ${
-                      metric.assessment === "positive"
-                        ? "text-emerald-500/70"
-                        : metric.assessment === "negative"
-                          ? "text-amber-500/70"
-                          : "text-zinc-600"
-                    }`}
+                    className={`inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide ${signalText(metric.assessment)}`}
                   >
-                    {metric.assessment}
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${signalDot(metric.assessment)}`}
+                    />
+                    {signalLabel(metric.assessment)}
                   </span>
-                </dd>
+                </div>
+                <p
+                  className={`mt-1.5 text-[16px] font-medium ${signalText(metric.assessment)}`}
+                >
+                  {metric.value}
+                </p>
               </div>
             ))}
-          </dl>
+          </div>
         </div>
       )}
 
-      <div className="mt-14 border-t border-white/[0.06] pt-10">
+      <div className="mt-10 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
         <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-zinc-500">
           Reasoning
         </h3>
-        <p className="mt-5 text-[15px] leading-[1.75] text-zinc-400">
+        <p className="mt-3 text-[15px] leading-[1.75] text-zinc-400">
           {decision.reasoning}
         </p>
       </div>

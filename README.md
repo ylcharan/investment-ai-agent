@@ -1,54 +1,134 @@
 # AI Investment Research Agent
 
-**InsideIIM × Altuni AI Labs — Take-Home Assignment**
+**Live demo:** [investment-ai-agent-vert.vercel.app](https://investment-ai-agent-vert.vercel.app/)  
+**Source:** [github.com/ylcharan/investment-ai-agent](https://github.com/ylcharan/investment-ai-agent)
 
-An AI agent that takes a company name, researches it live, and returns a clear **INVEST** or **PASS** verdict — with confidence, bull/bear cases, key metrics, and full reasoning you can audit.
+> Institutional-style equity research in one click — enter a company, watch a LangGraph agent gather evidence, score fundamentals & risks, and stream a structured **INVEST** or **PASS** verdict with green/red signal highlighting.
 
-> **Not another chatbot wrapper.** This is a multi-stage research pipeline with live web search, structured decisions, streaming progress, and production-minded failure handling (timeouts, model fallback, rate-limit retries).
+Built for **InsideIIM × Altuni AI Labs** (AI Product Development Engineer take-home). Stack matches the required production stack: **Next.js · LangChain.js / LangGraph.js · Gemini**.
 
 ---
 
 ## Overview
 
-Enter a company (e.g. Apple, Tesla, TCS, Reliance). The agent:
+Given a company name (e.g. `Apple`, `Tesla`, `Reliance`, `TCS`), the agent:
 
-1. **Searches** live market data, news, and competitive context (Tavily)
-2. **Synthesizes** a research brief
-3. **Analyzes** fundamentals and risks in one combined pass
-4. **Decides** INVEST or PASS with a Zod-validated structured verdict
+1. Fetches live market / news context via **Tavily**
+2. Produces a **Zod-structured research brief** (financials with positive / neutral / negative signals)
+3. Runs **fundamentals + risk analysis** as structured JSON
+4. Issues a **CIO verdict** — `INVEST` | `PASS` with confidence, bull/bear cases, key metrics, risk level, and reasoning
+5. Streams every stage to the UI over **SSE**, including total generation time
 
-You see each stage stream in real time, plus how long the full run took.
+This is not a single mega-prompt chatbot. It is a **multi-stage research pipeline** with typed outputs, failure handling, and an audit trail you can expand stage-by-stage.
 
-### What makes this unique
+### What sets it apart
 
 | Differentiator | Why it matters |
 |----------------|----------------|
-| **LangGraph multi-node pipeline** | Research → Analyze → Verdict — not one mega-prompt. Each stage has a job, like a real equity desk. |
-| **Structured CIO decision** | Zod schema forces `verdict`, `confidence`, `bullCase`, `bearCase`, `keyMetrics`, `riskLevel`, `timeHorizon` — no free-form waffle. |
-| **Live SSE streaming** | Progress updates as the agent works (search → brief → analysis → verdict), not a frozen spinner. |
-| **Resilient Gemini stack** | Model fallback (`gemini-3.5-flash` → `gemini-3.1-flash-lite`), retries on 429s, 60s timeouts — built after hitting real free-tier limits. |
-| **Graceful search degradation** | Without Tavily (or on timeout), the agent continues on LLM knowledge and *explicitly flags* the data gap. |
-| **Audit trail UI** | Verdict up front; Research / Fundamentals / Risks expandable underneath so reviewers can inspect how the call was made. |
-| **Generation timer** | Shows elapsed time (e.g. `generated in 24.3s`) — transparency on cost/latency. |
-| **Editorial, not dashboard UI** | Minimal dark interface focused on the decision, not a wall of tiles. |
+| **LangGraph pipeline** | Research → Analyze → Verdict — each node has one job, like a small equity desk |
+| **Zod end-to-end** | Research, analysis, and decision are all schema-validated — no free-form waffle |
+| **Signal-colored UI** | Positive → green · Negative → red · Risk severity → green / amber / red |
+| **Live SSE streaming** | Status updates (`Searching…`, `Writing brief…`, `Forming verdict…`) instead of a dead spinner |
+| **Resilient Gemini stack** | Model fallback, 429 retries, timeouts — hardened against real free-tier limits |
+| **Graceful search degrade** | Without Tavily, continues on LLM knowledge and flags **data gaps** |
+| **Generation timer** | Shows how long the full run took (e.g. `24.3s`) |
+| **Editorial dark UI** | Decision-first layout — not a tile-heavy “AI chatbot” dashboard |
 
 ---
 
-## How to Run
+## Features
+
+- **Multi-stage agent pipeline** — research brief → fundamentals & risks → CIO decision
+- **Structured outputs (Zod)** — metrics, ratings, severity, bull/bear cases always present
+- **Live web research** — Tavily finance-topic search with timeout + fallback
+- **Streaming progress** — Server-Sent Events from `/api/research`
+- **Color-coded signals** — green / red highlighting on metrics, cases, and risk severity
+- **Expandable audit panel** — inspect Research / Fundamentals / Risks after the verdict
+- **Production deploy** — live on [Vercel](https://investment-ai-agent-vert.vercel.app/)
+
+---
+
+## Architecture
+
+```mermaid
+graph TD
+    User([Company name]) --> UI[Next.js UI]
+    UI --> API[POST /api/research SSE]
+    API --> Search[Tavily Search]
+    Search --> Research[Research Node · Zod ResearchBrief]
+    Research --> Analyze[Analyze Node · Zod Analysis]
+    Analyze --> Verdict[Verdict Node · Zod Decision]
+    Verdict --> Client[Streamed UI · Signals + Timer]
+```
+
+### Pipeline stages
+
+| Stage | Role |
+|-------|------|
+| **Research** | Search the web → structured brief (overview, financials + signals, competitive position, developments, valuation, data gaps) |
+| **Analyze** | Fundamentals (quality score, Strong/Adequate/Weak, highlights) + Risks (overall level, categories with severity, top risks) |
+| **Verdict** | Structured `INVEST` / `PASS` with confidence, bull/bear, key metrics, reasoning, risk, time horizon |
+
+Originally four LLM hops were used; fundamentals + risks were **collapsed into one analyze call** to cut quota usage and avoid long “stuck” retries on free-tier Gemini — without losing the audit surface in the UI.
+
+---
+
+## Tech Stack
+
+| Layer | Choice |
+|-------|--------|
+| Framework | **Next.js 16** (App Router) |
+| UI | **React 19**, **Tailwind CSS v4** |
+| Agent | **LangGraph.js**, **LangChain.js** |
+| LLM | **Google Gemini** (`@langchain/google-genai`) — default `gemini-3.5-flash` |
+| Search | **Tavily** (`@langchain/tavily`) |
+| Validation | **Zod** (research, analysis, decision schemas) |
+| Streaming | **SSE** from `app/api/research/route.ts` |
+
+---
+
+## Folder Structure
+
+```
+app/
+  page.tsx                 # Main research UI
+  api/research/route.ts    # SSE + JSON research API
+  layout.tsx · globals.css
+components/
+  company-form.tsx         # Input + quick suggestions
+  research-progress.tsx    # Live stage progress
+  decision-card.tsx        # Verdict · signals · timer
+  analysis-panel.tsx       # Expandable research / fundamentals / risks
+lib/
+  types.ts                 # Zod schemas + AgentState
+  ui/signals.ts            # Green / red / amber signal helpers
+  agent/
+    graph.ts               # Pipeline + streamResearch()
+    prompts.ts             # Stage prompts
+    tools.ts               # Tavily search + timeout
+    retry.ts               # Timeout, retry, model fallback
+docs/
+  example-runs.md          # Sample company outputs
+  llm-transcripts/         # Build chat logs (bonus)
+```
+
+---
+
+## Installation & Local Development
 
 ### Prerequisites
 
-- **Node.js 18+**
-- **[Google Gemini API key](https://aistudio.google.com/apikey)** — required
-- **[Tavily API key](https://tavily.com)** — optional but strongly recommended for live research
+- Node.js **18+**
+- [Gemini API key](https://aistudio.google.com/apikey) (**required**)
+- [Tavily API key](https://tavily.com) (optional, strongly recommended)
 
 ### Setup
 
 ```bash
-# 1. Install dependencies
-npm install
+git clone https://github.com/ylcharan/investment-ai-agent.git
+cd investment-ai-agent
 
-# 2. Configure env
+npm install
 cp .env.example .env.local
 ```
 
@@ -61,11 +141,10 @@ TAVILY_API_KEY=tvly-your-tavily-key    # optional but recommended
 ```
 
 ```bash
-# 3. Start
 npm run dev
 ```
 
-Open **http://localhost:3000** → enter a company → **Analyze**.
+Open [http://localhost:3000](http://localhost:3000) → enter a company → **Analyze**.
 
 ### Production
 
@@ -74,199 +153,139 @@ npm run build
 npm start
 ```
 
-### Environment Variables
+### Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GEMINI_API_KEY` | **Yes** | Google AI Studio / Gemini API key |
+| `GEMINI_API_KEY` | **Yes** | Google Gemini API key |
 | `GEMINI_MODEL` | No | Default `gemini-3.5-flash`; falls back to `gemini-3.1-flash-lite` |
-| `TAVILY_API_KEY` | No | Live finance web search; without it, agent uses model knowledge + notes the gap |
+| `TAVILY_API_KEY` | No | Live finance web search |
 
 ---
 
 ## How It Works
 
-### Approach
+1. **Search** — One finance-topic Tavily query (15s timeout). On failure, continue with model knowledge and mark data gaps.
+2. **Research brief (Zod)** — Overview, financial metrics with `positive | neutral | negative`, competitive position, news, valuation.
+3. **Analysis (Zod)** — Quality score (1–10), Strong/Adequate/Weak, highlights with signals; risk overall + severity-tagged categories + top risks.
+4. **Verdict (Zod)** — Forced `INVEST` / `PASS` with confidence, cases, metrics, reasoning.
+5. **Stream** — Each step yields SSE events; UI updates progress, structured panels, and elapsed time.
 
-I modeled the agent after how a small research desk works — not how a chatbot answers a question:
-
-1. **Gather evidence** (search + brief)
-2. **Form a view** (fundamentals + risks)
-3. **Make a call** (structured INVEST/PASS)
-
-That separation keeps prompts focused, makes failures isolatable, and lets the UI show *where* the agent is — which matters for trust.
-
-### Architecture
-
-```
-Browser (Next.js)
-    │  POST /api/research { company, stream: true }
-    ▼
-API Route (SSE)
-    │  streams status + state updates
-    ▼
-Agent pipeline (LangGraph + sequential stream helpers)
-    │
-    ├─ research  → Tavily search → research brief (Gemini)
-    ├─ analyze   → fundamentals + risks in one LLM call
-    └─ verdict   → Zod-structured INVEST | PASS (Gemini)
-```
-
-### Pipeline stages
-
-| Stage | What happens |
-|-------|----------------|
-| `research` | One finance-topic Tavily query → Gemini synthesizes a concise research brief |
-| `analyze` | Single prompt producing **Fundamentals** and **Risks** sections (split for the UI) |
-| `verdict` | `withStructuredOutput(DecisionSchema)` → forced INVEST/PASS with confidence, cases, metrics |
-
-Originally I used four LLM nodes (research / fundamentals / risks / decision). That burned free-tier quota and felt “stuck” on the UI. I **collapsed fundamentals + risks into one analyze pass** to cut Gemini calls from ~4 to ~3 while keeping the same audit surface.
-
-### Tech stack (assignment stack)
-
-| Layer | Choice |
-|-------|--------|
-| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
-| Backend | Next.js App Router API (`/api/research`) |
-| Agent | LangGraph.js + LangChain.js |
-| LLM | Google Gemini (`@langchain/google-genai`) |
-| Search | Tavily (`@langchain/tavily`, finance topic) |
-| Schema | Zod decision object |
-
-### Project layout
-
-```
-app/
-  page.tsx                 # UI: form, progress, results, elapsed time
-  api/research/route.ts    # SSE + non-stream research endpoint
-lib/
-  types.ts                 # AgentState + DecisionSchema
-  agent/
-    graph.ts               # Pipeline, streaming generator
-    prompts.ts             # Research / analysis / decision prompts
-    tools.ts               # Tavily search + timeout
-    retry.ts               # Timeout, retry, model fallback, error formatting
-components/
-  company-form.tsx
-  research-progress.tsx
-  decision-card.tsx        # Verdict + generation time
-  analysis-panel.tsx       # Expandable research / fundamentals / risks
-docs/
-  example-runs.md          # Sample company outputs
-  llm-transcripts/         # Build chat logs (bonus)
-```
+Non-listed / insufficient-data companies are instructed to **PASS** with clear reasoning (advisory research only — not financial advice).
 
 ---
 
 ## Key Decisions & Trade-offs
 
-### What I chose (and why)
+### Chose
 
-1. **LangGraph + explicit stages over one prompt**  
-   Better reasoning quality, clearer debugging, and a UI that can show progress. Reviewers can see *how* the agent thought, not just the final sentence.
+- **LangGraph over one prompt** — clearer reasoning, better debugging, streamable stages  
+- **Zod for every stage** — consistent UI; green/red signals are data-driven, not CSS guesses  
+- **Gemini** — assignment-friendly access; then hardened for 429 / model deprecations  
+- **Collapse analyze** — fewer LLM calls → fewer free-tier hangs  
+- **SSE + status messages** — trust and demo polish  
+- **Advise, don’t execute** — no brokerage APIs  
 
-2. **Zod structured output for the verdict**  
-   Assignment asks for invest/pass *with reasoning*. Structured fields make that consistent and demo-friendly — confidence, bull/bear, metrics every time.
+### Left out (on purpose)
 
-3. **Gemini over OpenAI**  
-   Easy free-tier access for the assignment; switched after building; then hardened for real 429/404 model churn (`gemini-2.0` / `2.5` → `3.5` / `3.1-flash-lite`).
-
-4. **Collapse analyze into one LLM call**  
-   Trade: slightly less “role separation” inside analysis. Gain: fewer rate limits, faster runs, less “stuck at 13%” while retries burn minutes.
-
-5. **SSE streaming + status messages**  
-   Users (and reviewers) see `Searching…` / `Writing brief…` / `Forming verdict…` instead of a dead spinner.
-
-6. **Timeouts everywhere**  
-   15s search, 60s LLM — prefer a clear error over a 13-minute hang (which we hit once during free-tier storms).
-
-7. **Advise, don’t execute**  
-   No brokerage APIs. The product is research + judgment, not autonomous trading.
-
-### What I left out
-
-| Left out | Reason |
-|----------|--------|
-| Technical charts / price series | Scope = fundamental research + decision |
-| User accounts / memory | Single-session keeps demo simple |
-| Peer comparison in one run | High value, but more tokens + latency |
-| PDF export | Nice-to-have after the core loop works |
-| Paid market-data terminals | Tavily + Gemini is enough to prove the agent |
-
-### Ambiguity calls (noted for reviewers)
-
-- **Company name, not ticker required** — agent resolves “Apple”, “TCS”, “Reliance Industries”.
-- **Non-listed / unclear entities → PASS** — prompts instruct the CIO to pass when data is insufficient or the company isn’t investable as a public equity.
-- **Verdict is advisory** — not financial advice; human oversight assumed.
+| Deferred | Why |
+|----------|-----|
+| TradingView / price charts | Scope = fundamental research + decision |
+| Parallel multi-agent swarm | Quota & latency cost on free tier |
+| Auth / saved history | Single-session keeps the demo focused |
+| PDF export | Nice-to-have after the core loop |
+| Peer comparison in one run | High value; more tokens & latency |
 
 ---
 
 ## Example Runs
 
-Full narrative samples: **[docs/example-runs.md](./docs/example-runs.md)**.
+See **[docs/example-runs.md](./docs/example-runs.md)** for narrative samples.
 
-| Company | Typical call | Why |
-|---------|--------------|-----|
-| **Apple** | INVEST (high confidence) | Ecosystem moat, services growth, cash generation; premium valuation noted |
-| **Tesla** | PASS or cautious INVEST | Growth vs. margin compression, competition, narrative valuation |
-| **Reliance Industries** | INVEST (medium confidence) | India digital/retail + energy scale; conglomerate complexity |
+| Company | Typical call | Notes |
+|---------|--------------|-------|
+| Apple | INVEST (high confidence) | Ecosystem moat, services, cash; premium valuation |
+| Tesla | PASS / cautious | Growth vs margins, competition, narrative valuation |
+| Reliance | INVEST (medium) | India digital/retail + energy; conglomerate complexity |
 
-*Live runs vary with market news and model sampling. Re-run in the UI to reproduce.*
+Try live: [investment-ai-agent-vert.vercel.app](https://investment-ai-agent-vert.vercel.app/) — suggestions include Apple · Tesla · NVIDIA · Reliance · Infosys.
 
-**Try these yourself after setup:** `Apple`, `Tesla`, `NVIDIA`, `Reliance`, `Infosys`, `TCS`.
+---
+
+## Deployment
+
+Deployed on **Vercel**:
+
+**→ [https://investment-ai-agent-vert.vercel.app/](https://investment-ai-agent-vert.vercel.app/)**
+
+To redeploy:
+
+1. Push to [github.com/ylcharan/investment-ai-agent](https://github.com/ylcharan/investment-ai-agent)
+2. Import the repo in Vercel
+3. Set `GEMINI_API_KEY` (+ optional `TAVILY_API_KEY`, `GEMINI_MODEL`)
+4. Deploy
 
 ---
 
 ## What I Would Improve With More Time
 
-1. **Deploy on Vercel** with env vars for a shareable demo link (bonus)
-2. **Structured fundamentals feed** (Yahoo Finance / Alpha Vantage) for numeric P/E, revenue, margins — less scrape noise
-3. **Peer set comparison** in the same graph (company vs 2–3 peers)
-4. **Eval harness** — golden companies + expected verdict ranges to catch prompt regressions
-5. **Human-in-the-loop** — challenge the verdict with a follow-up question before locking
-6. **Session cache** — don’t re-research the same company within N minutes
-7. **PDF / Markdown report export** for sharing
-8. **Per-node model routing** — long-context model for filings, flash for verdict
+- [ ] Structured market-data feed (Yahoo Finance / Alpha Vantage) for numeric fundamentals  
+- [ ] Peer comparison in the same graph run  
+- [ ] Eval harness (golden companies + expected verdict ranges)  
+- [ ] Human-in-the-loop follow-up before locking the verdict  
+- [ ] Session cache for repeated company lookups  
+- [ ] PDF / Markdown report export  
+- [ ] Per-node model routing (long-context research vs flash verdict)
+
+---
+
+## Known Limitations
+
+- **Free-tier Gemini limits** — parallel or rapid runs can hit `429`; the app retries / falls back / times out with clear errors  
+- **Model availability** — older IDs (`gemini-2.0-flash`, `gemini-2.5-flash`) may be unavailable to new keys; defaults target Gemini 3.x  
+- **Private / obscure companies** — limited public data; agent should PASS and list data gaps  
+- **Advisory only** — not investment advice; humans decide  
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `GEMINI_API_KEY is not configured` | Add key to `.env.local` (or Vercel env) and restart |
+| `429` / rate limit | Wait 1–2 min, or set `GEMINI_MODEL=gemini-3.1-flash-lite` |
+| Model `404` / unavailable | Use `gemini-3.5-flash` or `gemini-3.1-flash-lite` |
+| Stuck / slow research | Ensure Tavily key is set; check network; timeouts should fail loudly within ~60s per LLM call |
+| Empty search | Agent continues without Tavily and shows data gaps |
 
 ---
 
 ## BONUS — LLM build transcripts
 
-This project was built with **Cursor + AI pair programming** (architecture, LangGraph design, Gemini migration, quota/stuck debugging, UI polish).
+Built with **Cursor + AI pair programming** (architecture, Gemini migration, LangGraph node naming, quota/stuck fixes, Zod UI, deploy).
 
-Transcripts and build notes:
-
-- **[docs/llm-transcripts/](./docs/llm-transcripts/)** — session logs and process notes for reviewers
-
-Including them shows the real path: Next.js scaffold → LangGraph agent → OpenAI → Gemini → rate limits → model deprecations → pipeline simplification → clean UI → elapsed timer.
+Process notes for reviewers: **[docs/llm-transcripts/](./docs/llm-transcripts/)**
 
 ---
 
-## Zip submission checklist
+## Links
 
-Before zipping:
-
-```bash
-# Do NOT include secrets or junk
-# Exclude: node_modules, .next, .env.local, .git (optional)
-
-zip -r investment-research-agent.zip . \
-  -x "node_modules/*" \
-  -x ".next/*" \
-  -x ".env.local" \
-  -x ".git/*" \
-  -x "*.DS_Store"
-```
-
-Include:
-
-- [x] Source code
-- [x] `README.md` (this file — all required sections)
-- [x] `.env.example` (keys documented, no secrets)
-- [x] `docs/example-runs.md`
-- [x] `docs/llm-transcripts/` (bonus)
+| | |
+|--|--|
+| **Live app** | [investment-ai-agent-vert.vercel.app](https://investment-ai-agent-vert.vercel.app/) |
+| **GitHub** | [ylcharan/investment-ai-agent](https://github.com/ylcharan/investment-ai-agent) |
+| **Example runs** | [docs/example-runs.md](./docs/example-runs.md) |
 
 ---
 
-Built for **InsideIIM × Altuni AI Labs** — AI Product Development Engineer (Intern) take-home.
-# investment-ai-agent
+## License
+
+Built for the **InsideIIM × Altuni AI Labs** take-home assignment.
+
+### Acknowledgements
+
+- [LangGraph.js](https://langchain-ai.github.io/langgraphjs/)
+- [LangChain.js](https://js.langchain.com/)
+- [Google Gemini](https://ai.google.dev/)
+- [Tavily](https://tavily.com/)
+- [Next.js](https://nextjs.org/)
