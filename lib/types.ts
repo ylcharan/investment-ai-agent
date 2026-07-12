@@ -126,6 +126,50 @@ export const DecisionSchema = z.object({
 
 export type InvestmentDecision = z.infer<typeof DecisionSchema>;
 
+export const ChatReplySchema = z.object({
+  answer: z.string().describe("Clear, concise answer to the user question"),
+  tone: SignalSchema.describe(
+    "Overall tone of the answer for the investment implication: positive / neutral / negative"
+  ),
+  keyPoints: z
+    .array(z.string())
+    .min(1)
+    .max(5)
+    .describe("1-5 short bullet takeaways"),
+  citations: z
+    .array(
+      z.enum([
+        "research",
+        "fundamentals",
+        "risks",
+        "verdict",
+        "futureReturns",
+        "peers",
+        "general",
+      ])
+    )
+    .min(1)
+    .max(4)
+    .describe("Which parts of the research context informed this answer"),
+  confidence: z
+    .number()
+    .min(0)
+    .max(100)
+    .describe("How confident you are given the available research context"),
+  followUps: z
+    .array(z.string())
+    .min(1)
+    .max(3)
+    .describe("1-3 short suggested follow-up questions"),
+  caveats: z
+    .array(z.string())
+    .max(3)
+    .optional()
+    .describe("Optional caveats when data is missing or uncertain"),
+});
+
+export type ChatReply = z.infer<typeof ChatReplySchema>;
+
 export type ResearchStep =
   | "research"
   | "analyze"

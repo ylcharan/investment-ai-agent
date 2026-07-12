@@ -7,6 +7,7 @@ import { ResearchProgress } from "@/components/research-progress";
 import { DecisionCard } from "@/components/decision-card";
 import { AnalysisPanel } from "@/components/analysis-panel";
 import { RelatedCompanies } from "@/components/related-companies";
+import { ResearchChat } from "@/components/research-chat";
 
 const STEP_LABELS: Record<string, string> = {
   research: "Gathering market intelligence",
@@ -179,6 +180,7 @@ export default function Home() {
             }`}
           >
             <div className="min-w-0 space-y-16">
+              <ResearchChat company={company} state={result} />
               <DecisionCard
                 company={company}
                 decision={result.decision as InvestmentDecision}
