@@ -151,6 +151,13 @@ function ResearchSection({
 }) {
   return (
     <div className="space-y-5">
+      {research.sector && (
+        <p className="text-[12px] text-zinc-500">
+          Sector{" "}
+          <span className="font-medium text-emerald-400/90">{research.sector}</span>
+        </p>
+      )}
+
       <p className="text-[14px] leading-[1.75] text-zinc-400">
         {research.overview}
       </p>

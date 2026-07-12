@@ -62,6 +62,8 @@ function formatResearchNotes(brief: ResearchBrief): string {
   return [
     brief.overview,
     "",
+    `Sector: ${brief.sector}`,
+    "",
     "Financials:",
     ...brief.financials.map((f) => `- ${f.label}: ${f.value} (${f.signal})`),
     "",
@@ -71,6 +73,12 @@ function formatResearchNotes(brief: ResearchBrief): string {
     ...brief.recentDevelopments.map((d) => `- ${d}`),
     "",
     `Valuation: ${brief.valuationNote}`,
+    "",
+    "Related peers:",
+    ...brief.relatedCompanies.map(
+      (c) =>
+        `- ${c.name}${c.ticker ? ` (${c.ticker})` : ""} — ${c.category}: ${c.whyRelated}`
+    ),
     brief.dataGaps?.length
       ? `\nData gaps:\n${brief.dataGaps.map((g) => `- ${g}`).join("\n")}`
       : "",

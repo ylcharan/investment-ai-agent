@@ -6,7 +6,11 @@ Search findings:
 {searchResults}
 
 Return a structured research brief. Be factual. Flag missing data in dataGaps.
-For each financial metric, set signal to positive / neutral / negative based on investment quality.`;
+For each financial metric, set signal to positive / neutral / negative based on investment quality.
+Set sector to the company's primary industry category.
+Include exactly 5 relatedCompanies: publicly listed peers in the SAME sector/category as {company}.
+Do not include {company} itself. Prefer well-known competitors or comparable companies.
+For each peer provide name, ticker if known, category, and a one-line whyRelated.`;
 
 export const ANALYSIS_PROMPT = `You are a senior equity analyst.
 
@@ -38,4 +42,11 @@ Make a disciplined decision:
 - PASS: Weak fundamentals, excessive valuation, high risks, or not a publicly investable company
 
 If the company is not a listed stock or data is insufficient, verdict must be PASS.
-For keyMetrics assessment use positive / neutral / negative.`;
+For keyMetrics assessment use positive / neutral / negative.
+
+Also include futureReturns:
+- outlook: positive / neutral / negative based on expected investor returns
+- scenarios: exactly 1Y, 3Y, and 5Y with expectedReturn ranges, conviction, and a one-line thesis
+- upsideCase and downsideCase as short narrative paths
+- disclaimer noting these are estimates, not guarantees
+Be realistic; do not invent precise certainty. Prefer ranges over single-point forecasts.`;

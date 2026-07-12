@@ -22,12 +22,23 @@ function formatElapsed(ms: number): string {
   return `${minutes}m ${remaining}s`;
 }
 
+function returnTone(value: string): "positive" | "neutral" | "negative" {
+  const lower = value.toLowerCase();
+  if (lower.includes("-") && /-\d/.test(lower)) return "negative";
+  if (lower.includes("+") || /\b\d+%/.test(lower)) {
+    if (lower.includes("to -") || lower.startsWith("-")) return "negative";
+    return "positive";
+  }
+  return "neutral";
+}
+
 export function DecisionCard({
   company,
   decision,
   elapsedMs,
 }: DecisionCardProps) {
   const isInvest = decision.verdict === "INVEST";
+  const returns = decision.futureReturns;
 
   return (
     <section className="animate-fade-up">
@@ -86,6 +97,85 @@ export function DecisionCard({
           {decision.summary}
         </p>
       </div>
+
+      {returns && (
+        <div className="mt-10">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.25em] text-zinc-500">
+                Future returns
+              </h3>
+              <p className="mt-2 text-[13px] text-zinc-500">
+                Estimated investor return scenarios from this analysis
+              </p>
+            </div>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${signalBg(returns.outlook)} ${signalText(returns.outlook)}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${signalDot(returns.outlook)}`} />
+              {signalLabel(returns.outlook)} outlook
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {returns.scenarios.map((scenario) => {
+              const tone = returnTone(scenario.expectedReturn);
+              return (
+                <div
+                  key={scenario.horizon}
+                  className={`rounded-xl border px-4 py-4 ${signalBg(tone)}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                      {scenario.horizon}
+                    </span>
+                    <span
+                      className={`text-[10px] uppercase tracking-wide ${
+                        scenario.conviction === "high"
+                          ? "text-emerald-400"
+                          : scenario.conviction === "medium"
+                            ? "text-amber-400"
+                            : "text-zinc-500"
+                      }`}
+                    >
+                      {scenario.conviction} conviction
+                    </span>
+                  </div>
+                  <p className={`mt-3 text-[18px] font-medium ${signalText(tone)}`}>
+                    {scenario.expectedReturn}
+                  </p>
+                  <p className="mt-2 text-[12px] leading-relaxed text-zinc-500">
+                    {scenario.thesis}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-400">
+                Upside case
+              </p>
+              <p className="mt-2 text-[13px] leading-relaxed text-zinc-300">
+                {returns.upsideCase}
+              </p>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-red-400">
+                Downside case
+              </p>
+              <p className="mt-2 text-[13px] leading-relaxed text-zinc-300">
+                {returns.downsideCase}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-zinc-600">
+            {returns.disclaimer}
+          </p>
+        </div>
+      )}
 
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-5">
